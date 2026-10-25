@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: multivendor-ecommerce-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn run:app
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.15
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: multivendor-ecommerce-db
+          property: connectionString
+
+databases:
+  - name: multivendor-ecommerce-db
+    databaseName: multivendor_ecommerce
+    user: multivendor_user

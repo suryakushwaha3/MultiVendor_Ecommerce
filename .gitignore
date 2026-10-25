@@ -1,35 +1,38 @@
-```gitignore
+﻿# Python environment
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+test_backups/
+
 # Environment variables and secrets
 .env
 .env.*
 !.env.example
 
-# Python virtual environment
-.venv/
-venv/
-env/
-
-# Python cache
-__pycache__/
-*.py[cod]
-.pytest_cache/
-
-# Flask instance and local database
+# Local database and instance files
 instance/
 *.db
 *.sqlite
 *.sqlite3
 
-# Uploaded files
+# Uploaded files (keep product images out of Git)
 uploads/
 
-# IDE and editor
+# Deployment backups
+hosting_backup_*/
+
+# IDE settings
 .vscode/
 
-# Logs
-*.log
+# Operating system files
+.DS_Store
+Thumbs.db
 
-# Test and coverage artifacts
-.coverage
-htmlcov/
-```
+# Local configuration backups
+config.py.backup_*

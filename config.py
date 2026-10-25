@@ -1,4 +1,4 @@
-import os
+﻿import os
 
 
 class Config:
@@ -15,21 +15,28 @@ class Config:
         "development-jwt-secret-change-before-deployment"
     )
 
-    JWT_ACCESS_TOKEN_EXPIRES = 60 * 60  # 1 hour
+    JWT_ACCESS_TOKEN_EXPIRES = 60 * 60
 
     # Database Configuration
-    # Development: SQLite
-    # Deployment: MySQL through DATABASE_URL
+    _database_url = os.getenv("DATABASE_URL")
 
-    SQLALCHEMY_DATABASE_URI = (
-        os.getenv("DATABASE_URL")
-        or "sqlite:///multivendor.db"
-    )
+    if _database_url:
+        # Normalize legacy PostgreSQL URL schemes.
+        if _database_url.startswith("postgres://"):
+            _database_url = "postgresql://" + _database_url[len("postgres://"):]
+
+        # Explicitly use psycopg 3 for PostgreSQL.
+        if _database_url.startswith("postgresql://"):
+            _database_url = "postgresql+psycopg://" + _database_url[len("postgresql://"):]
+
+        SQLALCHEMY_DATABASE_URI = _database_url
+    else:
+        SQLALCHEMY_DATABASE_URI = "sqlite:///multivendor.db"
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Upload Configuration
-    MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB per request
+    MAX_CONTENT_LENGTH = 10 * 1024 * 1024
 
     # API Configuration
     API_VERSION = "v1"
