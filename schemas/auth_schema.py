@@ -58,3 +58,56 @@ class VendorLoginSchema(Schema):
         load_only=True,
         validate=validate.Length(min=1, max=128)
     )
+
+class ForgotPasswordSchema(Schema):
+    account_type = fields.String(
+        required=True,
+        validate=validate.OneOf(["customer", "admin", "vendor"])
+    )
+
+    email = fields.Email(
+        required=True,
+        validate=validate.Length(max=255)
+    )
+
+
+class ResetPasswordSchema(Schema):
+    account_type = fields.String(
+        required=True,
+        validate=validate.OneOf(["customer", "admin", "vendor"])
+    )
+
+    token = fields.String(
+        required=True,
+        load_only=True,
+        validate=validate.Length(min=20, max=200)
+    )
+
+    new_password = fields.String(
+        required=True,
+        load_only=True,
+        validate=validate.Length(min=8, max=128)
+    )
+
+
+class ChangePasswordSchema(Schema):
+    current_password = fields.String(
+        required=True,
+        load_only=True,
+        validate=validate.Length(min=1, max=128)
+    )
+
+    new_password = fields.String(
+        required=True,
+        load_only=True,
+        validate=validate.Length(min=8, max=128)
+    )
+
+    @validates("new_password")
+    def validate_new_password(self, value, **kwargs):
+        current_password = self.context.get("current_password")
+
+        if current_password and value == current_password:
+            raise ValidationError(
+                "New password must be different from the current password."
+            )

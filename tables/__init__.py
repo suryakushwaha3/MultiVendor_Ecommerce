@@ -25,6 +25,7 @@ from tables.notification_table import Notification
 
 
 __all__ = [
+    "PasswordResetToken",
     "User",
     "Vendor",
     "Store",
@@ -46,3 +47,5 @@ __all__ = [
     "VendorCommission",
     "Notification",
 ]
+
+from tables.password_reset_token_table import PasswordResetToken
