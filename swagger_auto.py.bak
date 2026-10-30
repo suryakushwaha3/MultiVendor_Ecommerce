@@ -1,0 +1,475 @@
+import re
+
+from flask import current_app, jsonify
+
+
+# ---------------------------------------------------------
+# HTTP METHODS
+# ---------------------------------------------------------
+
+# HEAD and OPTIONS are generally generated automatically
+# by Flask. Exclude them from Swagger documentation.
+HTTP_METHODS = {
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+}
+
+
+# ---------------------------------------------------------
+# IGNORED ENDPOINTS
+# ---------------------------------------------------------
+
+IGNORED_ENDPOINT_PREFIXES = (
+    "flasgger.",
+)
+
+IGNORED_ENDPOINTS = {
+    "static",
+    "swagger_auto_spec",
+    "swagger_auto_spec_compat",
+}
+
+
+# ---------------------------------------------------------
+# FLASK PATH -> SWAGGER PATH
+# ---------------------------------------------------------
+
+def convert_flask_path_to_swagger(rule):
+    """
+    Convert Flask URL parameters to Swagger path parameters.
+
+    Example:
+        /api/v1/products/<int:product_id>
+
+    Result:
+        /api/v1/products/{product_id}
+    """
+
+    pattern = r"<(?:(?:[^:<>]+):)?([^<>]+)>"
+
+    return re.sub(
+        pattern,
+        lambda match: "{" + match.group(1) + "}",
+        rule,
+    )
+
+
+# ---------------------------------------------------------
+# EXTRACT PATH PARAMETERS
+# ---------------------------------------------------------
+
+def get_path_parameters(rule):
+    """
+    Extract path parameters from a Flask URL rule.
+
+    Supports:
+        <int:product_id>
+        <string:slug>
+        <product_id>
+    """
+
+    parameters = []
+
+    pattern = r"<(?:(?:[^:<>]+):)?([^<>]+)>"
+
+    for match in re.finditer(pattern, rule):
+        parameter_name = match.group(1)
+        flask_parameter = match.group(0)
+
+        parameter_type = (
+            "integer"
+            if flask_parameter.startswith("<int:")
+            else "string"
+        )
+
+        parameters.append({
+            "name": parameter_name,
+            "in": "path",
+            "required": True,
+            "type": parameter_type,
+            "description": (
+                f"Path parameter: {parameter_name}"
+            ),
+        })
+
+    return parameters
+
+
+# ---------------------------------------------------------
+# GENERATE SWAGGER TAGS
+# ---------------------------------------------------------
+
+def get_tag_from_endpoint(endpoint):
+    """
+    Generate readable Swagger tags from Flask endpoint names.
+    """
+
+    endpoint_name = endpoint.split(".")[0]
+
+    tag_names = {
+        "auth": "Authentication",
+        "users": "Users",
+        "user": "Users",
+        "payment": "Payments",
+        "payments": "Payments",
+        "vendor": "Vendors",
+        "vendors": "Vendors",
+        "admin": "Administration",
+        "store": "Stores",
+        "stores": "Stores",
+        "product": "Products",
+        "products": "Products",
+        "category": "Categories",
+        "categories": "Categories",
+        "cart": "Cart",
+        "order": "Orders",
+        "orders": "Orders",
+        "order_bp": "Orders",
+        "address": "Addresses",
+        "addresses": "Addresses",
+        "address_bp": "Addresses",
+        "review": "Reviews",
+        "reviews": "Reviews",
+        "review_bp": "Reviews",
+        "wishlist": "Wishlist",
+        "subcategory": "Subcategories",
+        "subcategories": "Subcategories",
+        "banner": "Banners",
+        "banners": "Banners",
+        "inventory": "Inventory",
+        "coupon": "Coupons",
+        "coupons": "Coupons",
+        "commission": "Commissions",
+        "commissions": "Commissions",
+        "notification": "Notifications",
+        "notifications": "Notifications",
+    }
+
+    if endpoint_name in tag_names:
+        return tag_names[endpoint_name]
+
+    return endpoint_name.replace("_", " ").title()
+
+
+# ---------------------------------------------------------
+# GENERATE OPERATION ID
+# ---------------------------------------------------------
+
+def generate_operation_id(endpoint, method):
+    """
+    Generate a stable Swagger operationId.
+    """
+
+    operation_id = f"{endpoint}_{method.lower()}"
+
+    operation_id = re.sub(
+        r"[^a-zA-Z0-9_]",
+        "_",
+        operation_id,
+    )
+
+    return operation_id
+
+
+# ---------------------------------------------------------
+# GENERATE RESPONSE DOCUMENTATION
+# ---------------------------------------------------------
+
+def get_default_responses():
+    """
+    Generate generic Swagger responses.
+
+    These descriptions do not guarantee that every endpoint
+    returns every listed status code.
+    """
+
+    return {
+        "200": {
+            "description": (
+                "Request processed successfully, if applicable."
+            )
+        },
+        "400": {
+            "description": "Invalid request or validation error."
+        },
+        "401": {
+            "description": (
+                "Authentication required, if applicable."
+            )
+        },
+        "403": {
+            "description": (
+                "Permission denied, if applicable."
+            )
+        },
+        "404": {
+            "description": (
+                "Requested resource not found, if applicable."
+            )
+        },
+        "500": {
+            "description": "Internal server error."
+        },
+    }
+
+
+# ---------------------------------------------------------
+# GENERATE SWAGGER SPECIFICATION
+# ---------------------------------------------------------
+
+def generate_swagger_spec(app):
+    """
+    Generate a Swagger 2.0 specification from registered
+    Flask application routes.
+
+    Includes:
+        - API paths
+        - Supported HTTP methods
+        - Path parameters
+        - Endpoint tags
+        - Generic JSON request bodies
+        - Generic response descriptions
+        - Bearer token authentication definition
+
+    Important:
+        This generator discovers Flask routes. It does not
+        automatically determine actual request fields,
+        response schemas, validation rules or permissions.
+    """
+
+    paths = {}
+    tags = set()
+
+    # -----------------------------------------------------
+    # DISCOVER REGISTERED FLASK ROUTES
+    # -----------------------------------------------------
+
+    for rule in app.url_map.iter_rules():
+
+        endpoint = rule.endpoint
+
+        # Skip ignored endpoints.
+        if endpoint in IGNORED_ENDPOINTS:
+            continue
+
+        # Skip Flasgger internal endpoints.
+        if endpoint.startswith(IGNORED_ENDPOINT_PREFIXES):
+            continue
+
+        # Select supported HTTP methods only.
+        methods = set(rule.methods or []) & HTTP_METHODS
+
+        if not methods:
+            continue
+
+        # Convert Flask parameters to Swagger syntax.
+        swagger_path = convert_flask_path_to_swagger(
+            rule.rule
+        )
+
+        # Create the path entry when necessary.
+        if swagger_path not in paths:
+            paths[swagger_path] = {}
+
+        # Determine the API category.
+        tag = get_tag_from_endpoint(endpoint)
+        tags.add(tag)
+
+        # -------------------------------------------------
+        # GENERATE EACH HTTP OPERATION
+        # -------------------------------------------------
+
+        for method in sorted(methods):
+
+            method_name = method.lower()
+
+            # Avoid duplicate HTTP methods for the same path.
+            if method_name in paths[swagger_path]:
+                continue
+
+            operation = {
+                "tags": [tag],
+
+                "summary": (
+                    f"{method} {swagger_path}"
+                ),
+
+                "description": (
+                    f"Flask endpoint: {endpoint}. "
+                    "Request fields, response schemas, "
+                    "authentication requirements and validation "
+                    "must be verified against the actual API "
+                    "implementation."
+                ),
+
+                "operationId": generate_operation_id(
+                    endpoint,
+                    method,
+                ),
+
+                "parameters": get_path_parameters(
+                    rule.rule
+                ),
+
+                "responses": get_default_responses(),
+            }
+
+            # -------------------------------------------------
+            # REQUEST BODY
+            # -------------------------------------------------
+
+            # Swagger 2.0 uses a body parameter for JSON input.
+            if method in {"POST", "PUT", "PATCH"}:
+
+                operation["parameters"].append({
+                    "name": "body",
+                    "in": "body",
+                    "required": False,
+                    "description": (
+                        "Generic JSON request body. "
+                        "Replace this placeholder with the "
+                        "actual endpoint-specific schema "
+                        "when available."
+                    ),
+                    "schema": {
+                        "type": "object",
+                        "additionalProperties": True,
+                    },
+                })
+
+            # -------------------------------------------------
+            # STORE OPERATION
+            # -------------------------------------------------
+
+            paths[swagger_path][method_name] = operation
+
+    # -----------------------------------------------------
+    # BUILD FINAL SWAGGER SPECIFICATION
+    # -----------------------------------------------------
+
+    spec = {
+        "swagger": "2.0",
+
+        "info": {
+            "title": "MultiVendor E-Commerce API",
+
+            "description": (
+                "Automatically generated route documentation "
+                "for the MultiVendor E-Commerce backend."
+            ),
+
+            "version": "1.0.0",
+        },
+
+        "basePath": "/",
+
+        "schemes": [
+            "http",
+            "https",
+        ],
+
+        "consumes": [
+            "application/json",
+        ],
+
+        "produces": [
+            "application/json",
+        ],
+
+        # -------------------------------------------------
+        # AUTHENTICATION DEFINITION
+        # -------------------------------------------------
+
+        "securityDefinitions": {
+            "BearerAuth": {
+                "type": "apiKey",
+                "name": "Authorization",
+                "in": "header",
+
+                "description": (
+                    "For protected endpoints, enter your JWT "
+                    "access token using this format: "
+                    "Bearer YOUR_ACCESS_TOKEN"
+                ),
+            }
+        },
+
+        # -------------------------------------------------
+        # API TAGS
+        # -------------------------------------------------
+
+        "tags": [
+            {
+                "name": tag,
+            }
+            for tag in sorted(tags)
+        ],
+
+        # -------------------------------------------------
+        # ALL DISCOVERED PATHS
+        # -------------------------------------------------
+
+        "paths": paths,
+    }
+
+    return spec
+
+
+# ---------------------------------------------------------
+# REGISTER AUTOMATIC SWAGGER JSON ENDPOINT
+# ---------------------------------------------------------
+
+def register_auto_swagger(app):
+    """
+    Register the automatically generated Swagger JSON.
+
+    URL:
+        /swagger-auto.json
+
+    This endpoint is separate from Flasgger's existing
+    specification endpoint.
+    """
+
+    def swagger_auto_spec():
+        spec = generate_swagger_spec(current_app)
+        return jsonify(spec)
+
+    # Register only once.
+    if "swagger_auto_spec" not in app.view_functions:
+
+        app.add_url_rule(
+            "/swagger-auto.json",
+            endpoint="swagger_auto_spec",
+            view_func=swagger_auto_spec,
+            methods=["GET"],
+        )
+
+
+# ---------------------------------------------------------
+# CONNECT FLASGGER UI TO THE AUTO-GENERATED SPECIFICATION
+# ---------------------------------------------------------
+
+def connect_auto_spec_to_flasgger(app):
+    """
+    Make Flasgger's existing /apispec_1.json endpoint
+    return the automatically generated API specification.
+
+    The existing Swagger UI can continue using its
+    default specification URL.
+    """
+
+    from flask import current_app, jsonify
+
+    def auto_apispec():
+        return jsonify(generate_swagger_spec(current_app))
+
+    if "apispec_1" not in app.view_functions:
+        raise RuntimeError(
+            "Flasgger endpoint 'apispec_1' was not registered. "
+            "Initialize Flasgger before connecting the spec."
+        )
+
+    app.view_functions["apispec_1"] = auto_apispec

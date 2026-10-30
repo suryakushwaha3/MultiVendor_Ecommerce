@@ -1,0 +1,73 @@
+from flasgger import Swagger
+
+
+def init_swagger(app):
+    """
+    Initialize Swagger UI for the MultiVendor E-Commerce API.
+    Swagger UI: /apidocs/
+    API specification: /swagger-auto.json
+    """
+
+    swagger_template = {
+        "swagger": "2.0",
+        "info": {
+            "title": "MultiVendor E-Commerce API",
+            "description": (
+                "API documentation for the MultiVendor "
+                "E-Commerce backend, including authentication, "
+                "users, vendors, products, categories, cart, "
+                "orders, payments, addresses, reviews, wishlist, "
+                "inventory, banners, coupons, commissions "
+                "and notifications."
+            ),
+            "version": "1.0.0",
+        },
+        "basePath": "/",
+        "schemes": ["http", "https"],
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "securityDefinitions": {
+            "BearerAuth": {
+                "type": "apiKey",
+                "name": "Authorization",
+                "in": "header",
+                "description": (
+                    "Enter your JWT access token using this format: "
+                    "Bearer YOUR_ACCESS_TOKEN"
+                ),
+            }
+        },
+    }
+
+    swagger_config = {
+        "headers": [],
+
+      "specs": [
+        {
+            "endpoint": "apispec_1",
+            "route": "/apispec_1.json",
+            "rule_filter": lambda rule: False,
+            "model_filter": lambda tag: True,
+            "url": "/swagger-auto.json",
+        }
+    ],
+
+    "static_url_path": "/flasgger_static",
+    "swagger_ui": True,
+    "specs_route": "/apidocs/",
+}
+ 
+
+
+
+      
+    # Configure Swagger UI to use the custom generated specification.
+    app.config["SWAGGER"]["specs"] = [
+        {
+            "url": "/swagger-auto.json",
+            "name": "MultiVendor E-Commerce API",
+        }
+    ]
+
+    return swagger
+ 

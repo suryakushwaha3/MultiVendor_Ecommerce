@@ -8,14 +8,19 @@ class Config:
         "SECRET_KEY",
         "development-secret-key-change-before-deployment"
     )
-
-    # JWT Authentication
+    
+ # JWT Authentication
     JWT_SECRET_KEY = os.getenv(
-        "JWT_SECRET_KEY",
-        "development-jwt-secret-change-before-deployment"
-    )
+    "JWT_SECRET_KEY",
+    "development-jwt-secret-change-before-deployment"
+)
 
+    # Access Token: 1 hour
     JWT_ACCESS_TOKEN_EXPIRES = 60 * 60
+
+    # Refresh Token: 30 days
+    JWT_REFRESH_TOKEN_EXPIRES = 30 * 24 * 60 * 60
+ 
 
     # Database Configuration
     _database_url = os.getenv("DATABASE_URL")

@@ -1,60 +1,61 @@
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
-from flask_jwt_extended import create_access_token
+
+from flask_jwt_extended import (
+    create_access_token,
+    create_refresh_token,
+)
 
 from app.extensions import db
 from tables.user_table import User
-from utils.security import verify_password
 from tables.vendor_table import Vendor
+from utils.security import verify_password
 
 
 def login_user(data):
-    """
-    Authenticate a user and generate a JWT access token.
-    """
+    """Authenticate a user and generate access and refresh tokens."""
 
     email = data["email"].strip().lower()
     password = data["password"]
 
     try:
-        # Find user by email
         user = db.session.execute(
             select(User).where(User.email == email)
         ).scalar_one_or_none()
 
-                # Reject invalid credentials
         if user is None or not verify_password(
-            password,
-            user.password_hash
+            password, user.password_hash
         ):
             return {
                 "success": False,
                 "message": "Invalid email or password."
             }, 401
 
-         
-        # Reject inactive users
         if not user.is_active:
             return {
                 "success": False,
                 "message": "Your account is inactive."
             }, 403
-            
-        # Generate JWT access token
+
         access_token = create_access_token(
             identity=str(user.id)
         )
 
-        # Return safe user information
+        refresh_token = create_refresh_token(
+            identity=str(user.id)
+        )
+
         return {
             "success": True,
             "message": "Login successful.",
             "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "Bearer",
             "user": {
                 "id": user.id,
                 "name": user.name,
-                "email": user.email
+                "email": user.email,
+                "role": user.role
             }
         }, 200
 
@@ -66,10 +67,9 @@ def login_user(data):
             "message": "Unable to process login at this time."
         }, 500
 
-    #vender login
 
 def login_vendor(data):
-    """Authenticate a vendor and generate a JWT access token."""
+    """Authenticate a vendor and generate access and refresh tokens."""
 
     email = data["email"].strip().lower()
     password = data["password"]
@@ -80,8 +80,7 @@ def login_vendor(data):
         ).scalar_one_or_none()
 
         if vendor is None or not verify_password(
-            password,
-            vendor.password_hash
+            password, vendor.password_hash
         ):
             return {
                 "success": False,
@@ -100,14 +99,21 @@ def login_vendor(data):
                 "message": "Your vendor account is awaiting approval."
             }, 403
 
+        identity = f"vendor:{vendor.id}"
+
         access_token = create_access_token(
-            identity=f"vendor:{vendor.id}"
+            identity=identity
+        )
+
+        refresh_token = create_refresh_token(
+            identity=identity
         )
 
         return {
             "success": True,
             "message": "Vendor login successful.",
             "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "Bearer",
             "vendor": {
                 "id": vendor.id,
@@ -119,7 +125,9 @@ def login_vendor(data):
 
     except SQLAlchemyError:
         db.session.rollback()
+
         return {
             "success": False,
             "message": "Unable to process vendor login at this time."
         }, 500
+ 

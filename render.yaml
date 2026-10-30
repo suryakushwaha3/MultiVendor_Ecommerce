@@ -1,8 +1,9 @@
-services:
+﻿services:
   - type: web
     name: multivendor-ecommerce-api
     runtime: python
     buildCommand: pip install -r requirements.txt
+    preDeployCommand: flask --app run:app db upgrade
     startCommand: gunicorn run:app
     healthCheckPath: /health
     envVars:
